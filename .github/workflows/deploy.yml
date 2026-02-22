@@ -97,7 +97,7 @@ jobs:
           docker push ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:latest
 
       # ── 8. Deploy Agent 1 to Container Apps ──────────────────────────────
-      - name: Deploy Agent 1
+     - name: Deploy Agent 1
         run: |
           az containerapp create \
             --name agent1-intake \
@@ -108,25 +108,8 @@ jobs:
             --target-port 8000 \
             --ingress external \
             --min-replicas 1 \
-            --max-replicas 1 \
-            --env-vars \
-              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
-              AZURE_CLIENT_ID=${{ secrets.AGENT1_CLIENT_ID }} \
-              AZURE_CLIENT_SECRET=secretref:agent1-secret \
-              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
-              KEYVAULT_SECRET_NAME=agent-a1-secret \
-              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
-              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
-              AOAI_API_KEY=secretref:aoai-api-key \
-              AOAI_DEPLOYMENT=gpt-4o \
-              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
-          2>/dev/null || \
-          az containerapp update \
-            --name agent1-intake \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:${{ github.sha }}
+            --max-replicas 1
 
-      # ── 9. Deploy Agent 2 ─────────────────────────────────────────────────
       - name: Deploy Agent 2
         run: |
           az containerapp create \
@@ -138,28 +121,10 @@ jobs:
             --target-port 8000 \
             --ingress internal \
             --min-replicas 1 \
-            --max-replicas 1 \
-            --env-vars \
-              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
-              AZURE_CLIENT_ID=${{ secrets.AGENT2_CLIENT_ID }} \
-              AZURE_CLIENT_SECRET=secretref:agent2-secret \
-              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
-              KEYVAULT_SECRET_NAME=agent-a2-secret \
-              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
-              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
-              AOAI_API_KEY=secretref:aoai-api-key \
-              AOAI_DEPLOYMENT=gpt-4o \
-              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
-          2>/dev/null || \
-          az containerapp update \
-            --name agent2-risk \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:${{ github.sha }}
+            --max-replicas 1
 
-      # ── 10. Deploy Agent 3 (compromise flag from workflow_dispatch) ────────
       - name: Deploy Agent 3
         run: |
-          COMPROMISED="${{ github.event.inputs.agent3_compromised || 'false' }}"
           az containerapp create \
             --name agent3-alert \
             --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -169,27 +134,8 @@ jobs:
             --target-port 8000 \
             --ingress internal \
             --min-replicas 1 \
-            --max-replicas 1 \
-            --env-vars \
-              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
-              AZURE_CLIENT_ID=${{ secrets.AGENT3_CLIENT_ID }} \
-              AZURE_CLIENT_SECRET=secretref:agent3-secret \
-              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
-              KEYVAULT_SECRET_NAME=agent-a3-secret \
-              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
-              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
-              AOAI_API_KEY=secretref:aoai-api-key \
-              AOAI_DEPLOYMENT=gpt-4o \
-              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
-              AGENT3_COMPROMISED=$COMPROMISED \
-          2>/dev/null || \
-          az containerapp update \
-            --name agent3-alert \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:${{ github.sha }} \
-            --set-env-vars AGENT3_COMPROMISED=$COMPROMISED
+            --max-replicas 1
 
-      # ── 11. Deploy Agent 4 ────────────────────────────────────────────────
       - name: Deploy Agent 4
         run: |
           az containerapp create \
@@ -201,23 +147,18 @@ jobs:
             --target-port 8000 \
             --ingress internal \
             --min-replicas 1 \
-            --max-replicas 1 \
-            --env-vars \
-              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
-              AZURE_CLIENT_ID=${{ secrets.AGENT4_CLIENT_ID }} \
-              AZURE_CLIENT_SECRET=secretref:agent4-secret \
-              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
-              KEYVAULT_SECRET_NAME=agent-a4-secret \
-              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
-              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
-              AOAI_API_KEY=secretref:aoai-api-key \
-              AOAI_DEPLOYMENT=gpt-4o \
-              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
-          2>/dev/null || \
-          az containerapp update \
-            --name agent4-logger \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:${{ github.sha }}
+            --max-replicas 1
+
+      - name: Deployment Summary
+        run: |
+          echo "════════════════════════════════════════════════════"
+          echo "  ZTA AGENT PIPELINE DEPLOYED SUCCESSFULLY"
+          echo "════════════════════════════════════════════════════"
+          echo "  Agent 1 (Intake):   External ingress via APIM"
+          echo "  Agent 2 (Risk):     Internal — APIM only"
+          echo "  Agent 3 (Alert):    Internal — APIM only"
+          echo "  Agent 4 (Logger):   Internal — APIM only"
+          echo "════════════════════════════════════════════════════"
 
       # ── 12. Print deployment summary ──────────────────────────────────────
       - name: Deployment Summary
