@@ -1,0 +1,26 @@
+<policies>
+  <inbound>
+    <base />
+    <choose>
+      <when condition="@(((Jwt)context.Variables[&quot;jwt-token&quot;]).Claims.GetValueOrDefault(&quot;appid&quot;, &quot;&quot;) != &quot;AGENT1_CLIENT_ID&quot;)">
+        <return-response>
+          <set-status code="403" reason="ZTA Scope Violation" />
+          <set-body>@{
+            return new JObject(
+              new JProperty("zta_error", true),
+              new JProperty("tenet_violated", "Tenet 4 — Dynamic Policy"),
+              new JProperty("message", "Access denied: Caller does not have scope to invoke Risk Scoring Agent"),
+              new JProperty("caller_appid", ((Jwt)context.Variables["jwt-token"]).Claims.GetValueOrDefault("appid", "unknown")),
+              new JProperty("required_appid", "AGENT1_CLIENT_ID"),
+              new JProperty("correlation_id", context.Request.Headers.GetValueOrDefault("X-Correlation-ID", "unknown")),
+              new JProperty("timestamp", DateTime.UtcNow.ToString("o"))
+            ).ToString();
+          }</set-body>
+        </return-response>
+      </when>
+    </choose>
+  </inbound>
+  <backend><forward-request /></backend>
+  <outbound><base /></outbound>
+  <on-error><base /></on-error>
+</policies>

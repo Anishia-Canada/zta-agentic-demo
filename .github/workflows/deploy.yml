@@ -1,0 +1,238 @@
+name: ZTA Agent Pipeline — Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      agent3_compromised:
+        description: 'Deploy Agent 3 in COMPROMISED state (Act 2 demo)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+# ── OIDC Federated Identity — NO secrets stored in GitHub ───────────────────
+# Tenet 2: Build pipeline itself uses ZTA — authenticated via federated creds
+permissions:
+  id-token: write   # Required for OIDC token request
+  contents: read
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  RESOURCE_GROUP: zta-demo-rg
+  CONTAINER_APP_ENV: zta-demo-env
+
+jobs:
+  build-and-deploy:
+    name: Build, Push & Deploy All ZTA Agents
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Azure Login via OIDC (no stored secrets!) ─────────────────────
+      # Tenet 2 & 3: Federated credential — short-lived, no static secret
+      - name: Login to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      # ── 3. Login to Azure Container Registry ─────────────────────────────
+      - name: Login to ACR
+        run: |
+          az acr login --name ${{ env.ACR_LOGIN_SERVER }}
+
+      # ── 4. Build and Push Agent 1 — Transaction Intake ───────────────────
+      - name: Build & Push Agent 1 (Transaction Intake)
+        run: |
+          docker build \
+            -f agents/agent1_intake/Dockerfile \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:latest \
+            .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:latest
+
+      # ── 5. Build and Push Agent 2 — Risk Scoring ─────────────────────────
+      - name: Build & Push Agent 2 (Risk Scoring)
+        run: |
+          docker build \
+            -f agents/agent2_risk/Dockerfile \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:latest \
+            .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:latest
+
+      # ── 6. Build and Push Agent 3 — Alert (breach flag configurable) ──────
+      - name: Build & Push Agent 3 (Alert)
+        run: |
+          docker build \
+            -f agents/agent3_alert/Dockerfile \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:latest \
+            .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:latest
+
+      # ── 7. Build and Push Agent 4 — Compliance Logger ────────────────────
+      - name: Build & Push Agent 4 (Compliance Logger)
+        run: |
+          docker build \
+            -f agents/agent4_logger/Dockerfile \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:${{ github.sha }} \
+            -t ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:latest \
+            .
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:${{ github.sha }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:latest
+
+      # ── 8. Deploy Agent 1 to Container Apps ──────────────────────────────
+      - name: Deploy Agent 1
+        run: |
+          az containerapp create \
+            --name agent1-intake \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.CONTAINER_APP_ENV }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:${{ github.sha }} \
+            --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --target-port 8000 \
+            --ingress external \
+            --min-replicas 1 \
+            --max-replicas 1 \
+            --env-vars \
+              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
+              AZURE_CLIENT_ID=${{ secrets.AGENT1_CLIENT_ID }} \
+              AZURE_CLIENT_SECRET=secretref:agent1-secret \
+              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
+              KEYVAULT_SECRET_NAME=agent-a1-secret \
+              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
+              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
+              AOAI_API_KEY=secretref:aoai-api-key \
+              AOAI_DEPLOYMENT=gpt-4o \
+              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
+          2>/dev/null || \
+          az containerapp update \
+            --name agent1-intake \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:${{ github.sha }}
+
+      # ── 9. Deploy Agent 2 ─────────────────────────────────────────────────
+      - name: Deploy Agent 2
+        run: |
+          az containerapp create \
+            --name agent2-risk \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.CONTAINER_APP_ENV }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:${{ github.sha }} \
+            --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --target-port 8000 \
+            --ingress internal \
+            --min-replicas 1 \
+            --max-replicas 1 \
+            --env-vars \
+              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
+              AZURE_CLIENT_ID=${{ secrets.AGENT2_CLIENT_ID }} \
+              AZURE_CLIENT_SECRET=secretref:agent2-secret \
+              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
+              KEYVAULT_SECRET_NAME=agent-a2-secret \
+              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
+              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
+              AOAI_API_KEY=secretref:aoai-api-key \
+              AOAI_DEPLOYMENT=gpt-4o \
+              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
+          2>/dev/null || \
+          az containerapp update \
+            --name agent2-risk \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:${{ github.sha }}
+
+      # ── 10. Deploy Agent 3 (compromise flag from workflow_dispatch) ────────
+      - name: Deploy Agent 3
+        run: |
+          COMPROMISED="${{ github.event.inputs.agent3_compromised || 'false' }}"
+          az containerapp create \
+            --name agent3-alert \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.CONTAINER_APP_ENV }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:${{ github.sha }} \
+            --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --target-port 8000 \
+            --ingress internal \
+            --min-replicas 1 \
+            --max-replicas 1 \
+            --env-vars \
+              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
+              AZURE_CLIENT_ID=${{ secrets.AGENT3_CLIENT_ID }} \
+              AZURE_CLIENT_SECRET=secretref:agent3-secret \
+              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
+              KEYVAULT_SECRET_NAME=agent-a3-secret \
+              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
+              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
+              AOAI_API_KEY=secretref:aoai-api-key \
+              AOAI_DEPLOYMENT=gpt-4o \
+              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
+              AGENT3_COMPROMISED=$COMPROMISED \
+          2>/dev/null || \
+          az containerapp update \
+            --name agent3-alert \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:${{ github.sha }} \
+            --set-env-vars AGENT3_COMPROMISED=$COMPROMISED
+
+      # ── 11. Deploy Agent 4 ────────────────────────────────────────────────
+      - name: Deploy Agent 4
+        run: |
+          az containerapp create \
+            --name agent4-logger \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --environment ${{ env.CONTAINER_APP_ENV }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:${{ github.sha }} \
+            --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --target-port 8000 \
+            --ingress internal \
+            --min-replicas 1 \
+            --max-replicas 1 \
+            --env-vars \
+              AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }} \
+              AZURE_CLIENT_ID=${{ secrets.AGENT4_CLIENT_ID }} \
+              AZURE_CLIENT_SECRET=secretref:agent4-secret \
+              KEYVAULT_URL=${{ secrets.KEYVAULT_URL }} \
+              KEYVAULT_SECRET_NAME=agent-a4-secret \
+              APIM_BASE_URL=${{ secrets.APIM_BASE_URL }} \
+              AOAI_ENDPOINT=${{ secrets.AOAI_ENDPOINT }} \
+              AOAI_API_KEY=secretref:aoai-api-key \
+              AOAI_DEPLOYMENT=gpt-4o \
+              TOKEN_SCOPE=${{ secrets.APIM_SCOPE }} \
+          2>/dev/null || \
+          az containerapp update \
+            --name agent4-logger \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:${{ github.sha }}
+
+      # ── 12. Print deployment summary ──────────────────────────────────────
+      - name: Deployment Summary
+        run: |
+          echo "════════════════════════════════════════════════════"
+          echo "  ZTA AGENT PIPELINE DEPLOYED SUCCESSFULLY"
+          echo "════════════════════════════════════════════════════"
+          echo ""
+          echo "  Agent 1 (Intake):   External ingress via APIM"
+          echo "  Agent 2 (Risk):     Internal — APIM only"
+          echo "  Agent 3 (Alert):    Internal — APIM only"
+          echo "  Agent 4 (Logger):   Internal — APIM only"
+          echo ""
+          echo "  Agent 3 Compromised: ${{ github.event.inputs.agent3_compromised || 'false' }}"
+          echo ""
+          echo "  APIM Base URL: ${{ secrets.APIM_BASE_URL }}"
+          echo "  Image Tag: ${{ github.sha }}"
+          echo "════════════════════════════════════════════════════"

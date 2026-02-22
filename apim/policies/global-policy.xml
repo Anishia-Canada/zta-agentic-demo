@@ -1,0 +1,101 @@
+<!--
+APIM Global Policy — Applied to ALL APIs
+Tenet 2: All communications secured
+Tenet 6: Dynamic auth/authz enforced at the PEP on every single request
+
+This policy runs BEFORE any request reaches an agent backend.
+No request proceeds without a valid JWT from Entra ID.
+-->
+<policies>
+  <inbound>
+    <!-- ── Tenet 2: Validate JWT on every inbound request ─────────────── -->
+    <validate-jwt
+      header-name="Authorization"
+      failed-validation-httpcode="401"
+      failed-validation-error-message="ZTA: Valid Bearer token required. No implicit trust granted."
+      require-expiration-time="true"
+      require-scheme="Bearer"
+      require-signed-tokens="true"
+      output-token-variable-name="jwt-token">
+
+      <!-- Entra ID OIDC endpoint — replace YOUR_TENANT_ID -->
+      <openid-config url="https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0/.well-known/openid-configuration" />
+
+      <!-- Only tokens issued to our registered agent app registrations are valid -->
+      <audiences>
+        <audience>YOUR_APIM_APP_ID_URI</audience>
+      </audiences>
+
+      <!-- Only our Entra ID tenant issues valid tokens -->
+      <issuers>
+        <issuer>https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0</issuer>
+        <issuer>https://sts.windows.net/YOUR_TENANT_ID/</issuer>
+      </issuers>
+    </validate-jwt>
+
+    <!-- ── Tenet 7: Log every request with ZTA context ────────────────── -->
+    <log-to-eventhub logger-id="zta-audit-logger">
+      @{
+        return new JObject(
+          new JProperty("timestamp", DateTime.UtcNow.ToString("o")),
+          new JProperty("correlation_id", context.Request.Headers.GetValueOrDefault("X-Correlation-ID", context.RequestId)),
+          new JProperty("caller_agent", context.Request.Headers.GetValueOrDefault("X-Agent-ID", "unknown")),
+          new JProperty("operation", context.Operation.Id),
+          new JProperty("api", context.Api.Name),
+          new JProperty("method", context.Request.Method),
+          new JProperty("url", context.Request.Url.ToString()),
+          new JProperty("client_id", ((Jwt)context.Variables["jwt-token"]).Claims.GetValueOrDefault("appid", "unknown")),
+          new JProperty("zta_event", "REQUEST_RECEIVED")
+        ).ToString();
+      }
+    </log-to-eventhub>
+
+    <!-- ── Tenet 5: Forward caller identity to backend for posture check ── -->
+    <set-header name="X-Verified-Client-ID" exists-action="override">
+      <value>@(((Jwt)context.Variables["jwt-token"]).Claims.GetValueOrDefault("appid", "unknown"))</value>
+    </set-header>
+
+    <set-header name="X-ZTA-Verified" exists-action="override">
+      <value>true</value>
+    </set-header>
+  </inbound>
+
+  <backend>
+    <forward-request timeout="30" />
+  </backend>
+
+  <outbound>
+    <!-- Strip internal headers from responses — data minimization -->
+    <set-header name="X-Verified-Client-ID" exists-action="delete" />
+    <set-header name="X-ZTA-Verified" exists-action="delete" />
+  </outbound>
+
+  <on-error>
+    <!-- ── Tenet 7: Log all policy violations ─────────────────────────── -->
+    <log-to-eventhub logger-id="zta-audit-logger">
+      @{
+        return new JObject(
+          new JProperty("timestamp", DateTime.UtcNow.ToString("o")),
+          new JProperty("correlation_id", context.Request.Headers.GetValueOrDefault("X-Correlation-ID", context.RequestId)),
+          new JProperty("caller_agent", context.Request.Headers.GetValueOrDefault("X-Agent-ID", "unknown")),
+          new JProperty("error_reason", context.LastError.Message),
+          new JProperty("error_source", context.LastError.Source),
+          new JProperty("status_code", context.Response.StatusCode.ToString()),
+          new JProperty("zta_event", "POLICY_VIOLATION")
+        ).ToString();
+      }
+    </log-to-eventhub>
+
+    <return-response>
+      <set-status code="@(context.Response.StatusCode)" reason="@(context.Response.StatusReason)" />
+      <set-body>@{
+        return new JObject(
+          new JProperty("zta_error", true),
+          new JProperty("message", context.LastError.Message),
+          new JProperty("correlation_id", context.Request.Headers.GetValueOrDefault("X-Correlation-ID", "unknown")),
+          new JProperty("timestamp", DateTime.UtcNow.ToString("o"))
+        ).ToString();
+      }</set-body>
+    </return-response>
+  </on-error>
+</policies>
