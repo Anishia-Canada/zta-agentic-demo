@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # ZTA Agentic Demo — NIST SP 800-207
 
 **Zero Trust Architecture for AI Agent Communication**  
