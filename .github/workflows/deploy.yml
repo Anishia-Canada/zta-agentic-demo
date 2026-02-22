@@ -77,6 +77,8 @@ jobs:
             --environment ${{ env.CONTAINER_APP_ENV }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/agent1-intake:${{ github.sha }} \
             --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
             --target-port 8000 \
             --ingress external \
             --min-replicas 1 \
@@ -90,6 +92,8 @@ jobs:
             --environment ${{ env.CONTAINER_APP_ENV }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/agent2-risk:${{ github.sha }} \
             --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
             --target-port 8000 \
             --ingress internal \
             --min-replicas 1 \
@@ -103,6 +107,8 @@ jobs:
             --environment ${{ env.CONTAINER_APP_ENV }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/agent3-alert:${{ github.sha }} \
             --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
             --target-port 8000 \
             --ingress internal \
             --min-replicas 1 \
@@ -116,6 +122,8 @@ jobs:
             --environment ${{ env.CONTAINER_APP_ENV }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/agent4-logger:${{ github.sha }} \
             --registry-server ${{ env.ACR_LOGIN_SERVER }} \
+            --registry-username ${{ secrets.ACR_USERNAME }} \
+            --registry-password ${{ secrets.ACR_PASSWORD }} \
             --target-port 8000 \
             --ingress internal \
             --min-replicas 1 \
