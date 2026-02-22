@@ -25,8 +25,8 @@ env:
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  RESOURCE_GROUP: zta-demo-rg
-  CONTAINER_APP_ENV: zta-demo-env
+  RESOURCE_GROUP: rg-ai-zerotrust-demo
+  CONTAINER_APP_ENV: managedEnvironment-rgaizerotrustde-81c9
 
 jobs:
   build-and-deploy:
