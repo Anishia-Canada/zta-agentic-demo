@@ -175,5 +175,5 @@ Each agent is a **Non-Person Entity (NPE)** per NIST 800-207 §5.7:
 **No agent can call any agent outside its defined scope. APIM enforces this on every single request.**
 =======
 # zta-agentic-demo
-ZTA Agentic Test
->>>>>>> de02b0ba32f08275384449086d3f8b8acd784b41
+Full Walkthrough- YouTube Link : https://youtu.be/C3KR6bzc9Bk
+
