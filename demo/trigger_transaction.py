@@ -32,7 +32,7 @@ console = Console()
 import os
 APIM_BASE_URL = os.environ.get("APIM_BASE_URL", "https://zta-demo-apim.azure-api.net")
 APIM_KEY = os.environ.get("APIM_SUBSCRIPTION_KEY", "")
-
+print(f"DEBUG: APIM_KEY = {APIM_KEY[:10]}...")
 HEADERS = {
     "Content-Type": "application/json",
     "Ocp-Apim-Subscription-Key": APIM_KEY
