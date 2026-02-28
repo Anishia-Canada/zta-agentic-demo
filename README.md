@@ -185,3 +185,93 @@ Each agent is a **Non-Person Entity (NPE)** per NIST 800-207 §5.7:
 **No agent can call any agent outside its defined scope. APIM enforces this on every single request.**
 =======
 
+---
+
+## 🚀 Future Roadmap
+
+The current architecture proves the Zero Trust pattern for agentic AI. The next phase extends it into enterprise-grade resilience and orchestration.
+
+---
+
+### 🧠 Super Agent — Orchestrator Layer
+
+A Super Agent sits above the four agents, managing the pipeline as an autonomous coordinator.
+
+**Responsibilities:**
+- Health checks every agent on a defined interval
+- Detects anomalous behaviour — not just crashes but suspicious call patterns
+- Promotes standby agents automatically on breach detection
+- Reports orchestration decisions to Azure Monitor with full correlation IDs
+
+**ZTA Implication:** The Super Agent must itself be hardened to the highest standard — its own NPE identity in Entra ID, its own APIM policy, and its own immutable audit trail. Per the Conservation of Complexity, concentrating orchestration at one node does not reduce system risk — it relocates it. A failure at the Super Agent = total system integrity collapse.
+
+> *"The sleeper container idea is exactly right. ZTA makes high availability cleaner for AI agents — because identity is decoupled from the container. You revoke one NPE token, promote the standby, and Entra ID issues a fresh scoped credential instantly. The trust boundary doesn't move. The policy doesn't change. Only the worker changes. The bank never notices."*
+
+---
+
+### 💤 Sleeper Container Pattern
+
+Agent 3 (Alert Agent) plays a critical role in a live banking environment. A single compromised or failed instance cannot be acceptable downtime.
+```
+Agent 3a (ACTIVE)  ──▶  Handling alerts
+Agent 3b (STANDBY) ──▶  Pre-warmed, pre-authenticated, waiting
+Agent 3c (SLEEPER) ──▶  Cold, spun up by Super Agent on demand
+```
+
+**How ZTA enables clean failover:**
+- Each standby has its own NPE identity and scoped token in Entra ID
+- On failover — Super Agent revokes Agent 3a token, promotes Agent 3b
+- Entra ID issues a fresh credential to Agent 3b instantly
+- APIM routes to Agent 3b with zero policy change
+- The trust boundary never moves — only the worker changes
+
+**Azure Implementation:**
+- Agent 3a/3b run as active Container Apps replicas
+- Agent 3c lives as a pre-built image in Azure Container Registry — spun up as a new Container App instance by the Super Agent on demand
+- All three share the same APIM policy — identity swap is the only change
+
+---
+
+### ⚡ High Availability — Active-Active Architecture
+
+For mission-critical banking workloads, agents run in pairs with load balancing rather than active-standby.
+
+| Pattern | Description | ZTA Requirement |
+|---------|-------------|----------------|
+| Active-Active | Agent 3a + Agent 3b both running, load balanced by APIM | Both require separate NPE identities and scoped tokens |
+| Active-Standby | Agent 3b pre-warmed, promoted by Super Agent on failure | Standby token pre-issued, activated on failover |
+| Sleeper | Agent 3c cold, spun up on demand | Token issued only on activation — cleanest ZTA posture |
+
+**Key insight:** In traditional HA, failover raises the question of whether the new instance inherits the old trust — session state, credentials, permissions. In Zero Trust this problem disappears. The new agent gets its own fresh token from Entra ID. Short-lived. Scoped. The trust boundary is the policy, not the container.
+
+---
+
+### 🤝 Multi-Agent Consensus — Agent 2b
+
+A single risk score from Agent 2 determining a fraud decision is a single point of reasoning failure. Version 2 introduces a consensus layer.
+```
+Transaction
+    │
+    ├──▶ Agent 2a (Risk Scorer — Model A) ──▶ Score: 82
+    │                                              │
+    └──▶ Agent 2b (Risk Scorer — Model B) ──▶ Score: 79
+                                                   │
+                                          Consensus Check
+                                         (within tolerance?)
+                                          ╱              ╲
+                                        YES               NO
+                                         │                 │
+                                   Agent 3 Alert    Human escalation
+```
+
+**Rules:**
+- Both scores must agree within a defined tolerance band (e.g. ±10 points)
+- Agreement → Agent 3 invoked automatically
+- Disagreement → human-in-the-loop escalation, no automated alert
+- The consensus coordinator becomes the foundation of the Super Agent
+
+**ZTA Implication:** Agent 2b requires its own NPE identity, its own APIM scope, and its own Key Vault secret. It is a fully independent agent — not a replica. A compromised Agent 2a cannot influence Agent 2b's scoring.
+
+---
+
+> These patterns extend the Zero Trust principle beyond security into resilience — an architecture where no single agent failure, compromise, or anomaly can bring down the pipeline. Every failover is authenticated. Every recovery is logged. Every worker is replaceable. The trust boundary never moves.
