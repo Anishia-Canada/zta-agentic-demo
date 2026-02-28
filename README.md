@@ -1,3 +1,13 @@
+## 🎬 Demo Video
+
+![](https://capsule-render.vercel.app/api?type=waving&color=0:1B4F72,100:00c853&height=80&section=header&text=Watch%20The%20Demo&fontSize=28&fontColor=ffffff&animation=twinkling)
+
+[![ZTA Agentic AI Demo](https://img.youtube.com/vi/C3KR6bzc9Bk/maxresdefault.jpg)](https://youtu.be/C3KR6bzc9Bk)
+
+> *Live breach. Real Azure. Zero blast radius.*
+
+![](https://capsule-render.vercel.app/api?type=waving&color=0:00c853,100:1B4F72&height=60&section=footer)
+
 
 # ZTA Agentic Demo — NIST SP 800-207
 
